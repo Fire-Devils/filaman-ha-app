@@ -1,0 +1,202 @@
+name: Sync app version
+
+# Keeps the add-on pinned to the latest published FilaMan release: bumps
+# filaman/config.yaml and filaman/Dockerfile, writes a changelog entry and
+# starts the builder. Everything runs with this repository's GITHUB_TOKEN — no
+# secrets to maintain.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "App tag to pin, e.g. v1.3.4 (default: the latest release)"
+        required: false
+        type: string
+      dry_run:
+        description: "Only report what would change"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sync-app-version
+  cancel-in-progress: false
+
+env:
+  APP_REPO: Fire-Devils/filaman-system
+  APP_IMAGE: fire-devils/filaman-system
+
+jobs:
+  sync:
+    name: Sync with the latest FilaMan release
+    if: github.repository == 'Fire-Devils/filaman-ha-app'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Resolve the target version
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${INPUT_TAG:-}" ]]; then
+            if [[ ! "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::tag must look like v1.2.3, got '${INPUT_TAG}'"
+              exit 1
+            fi
+            tag="${INPUT_TAG}"
+          else
+            info=$(gh release view --repo "${APP_REPO}" \
+              --json tagName,isDraft,isPrerelease)
+            tag=$(jq -r '.tagName' <<<"${info}")
+            if [[ "$(jq -r '.isDraft' <<<"${info}")" == "true" \
+               || "$(jq -r '.isPrerelease' <<<"${info}")" == "true" ]]; then
+              echo "Latest release ${tag} is a draft or pre-release — nothing to do." \
+                >>"${GITHUB_STEP_SUMMARY}"
+              echo "skip=true" >>"${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          fi
+          version="${tag#v}"
+
+          current=$(sed -n 's/^version: "\(.*\)"$/\1/p' filaman/config.yaml)
+          if [[ -z "${current}" ]]; then
+            echo "::error::could not read version from filaman/config.yaml"
+            exit 1
+          fi
+          # A pure add-on fix ships as 1.3.3-2; compare the app part only.
+          base="${current%%-*}"
+
+          if [[ "${version}" == "${base}" ]]; then
+            echo "Add-on is already at ${current} (app ${tag}) — nothing to do." \
+              >>"${GITHUB_STEP_SUMMARY}"
+            echo "skip=true" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          highest=$(printf '%s\n%s\n' "${base}" "${version}" | sort -V | tail -1)
+          if [[ "${highest}" != "${version}" ]]; then
+            echo "::error::refusing to downgrade: add-on is at ${current}, requested ${tag}"
+            exit 1
+          fi
+
+          # Only publish versions whose app image actually exists — a release
+          # can be tagged while its image build failed.
+          token=$(curl -fsSL \
+            "https://ghcr.io/token?scope=repository:${APP_IMAGE}:pull&service=ghcr.io" \
+            | jq -r '.token')
+          if ! curl -fsS -o /dev/null \
+              -H "Authorization: Bearer ${token}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
+              "https://ghcr.io/v2/${APP_IMAGE}/manifests/${tag}"; then
+            echo "::error::ghcr.io/${APP_IMAGE}:${tag} does not exist — did the app release build fail?"
+            exit 1
+          fi
+
+          {
+            echo "skip=false"
+            echo "tag=${tag}"
+            echo "version=${version}"
+            echo "current=${current}"
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Bump the add-on to ${{ steps.resolve.outputs.tag }}
+        if: steps.resolve.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          tag = os.environ["TAG"]
+          version = os.environ["VERSION"]
+          app_repo = os.environ["APP_REPO"]
+
+          def sub_once(path: str, pattern: str, replacement: str) -> None:
+              file = pathlib.Path(path)
+              text = file.read_text(encoding="utf-8")
+              new_text, count = re.subn(pattern, replacement, text, flags=re.M)
+              if count != 1:
+                  raise SystemExit(
+                      f"::error::expected exactly one match for {pattern!r} "
+                      f"in {path}, found {count}"
+                  )
+              file.write_text(new_text, encoding="utf-8")
+
+          sub_once("filaman/config.yaml", r'^version: ".*"$', f'version: "{version}"')
+          sub_once(
+              "filaman/Dockerfile",
+              r"^ARG FILAMAN_VERSION=.*$",
+              f"ARG FILAMAN_VERSION={tag}",
+          )
+
+          changelog = pathlib.Path("filaman/CHANGELOG.md")
+          text = changelog.read_text(encoding="utf-8")
+          marker = "\n## "
+          index = text.index(marker) + 1
+          entry = (
+              f"## {version}\n\n"
+              f"- Updated FilaMan to [{tag}]"
+              f"(https://github.com/{app_repo}/releases/tag/{tag}).\n\n"
+          )
+          changelog.write_text(text[:index] + entry + text[index:], encoding="utf-8")
+          PY
+          git --no-pager diff --stat
+
+      - name: Report the dry run
+        if: steps.resolve.outputs.skip == 'false' && inputs.dry_run
+        run: |
+          set -euo pipefail
+          {
+            echo "### Dry run: would bump to ${{ steps.resolve.outputs.tag }}"
+            echo
+            echo '```diff'
+            git --no-pager diff
+            echo '```'
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Commit and push
+        if: steps.resolve.outputs.skip == 'false' && !inputs.dry_run
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+          CURRENT: ${{ steps.resolve.outputs.current }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add filaman/config.yaml filaman/Dockerfile filaman/CHANGELOG.md
+          git commit -m "chore: update FilaMan to ${TAG}" -m \
+            "Add-on ${CURRENT} -> ${VERSION}, pinned to ghcr.io/${APP_IMAGE}:${TAG}."
+          git push
+
+      - name: Trigger the image build
+        if: steps.resolve.outputs.skip == 'false' && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          # A push made with GITHUB_TOKEN does not start other workflows, so
+          # ask the builder to run explicitly.
+          gh workflow run builder.yaml --ref "${GITHUB_REF_NAME}"
+          {
+            echo "### Bumped the add-on to ${VERSION}"
+            echo
+            runs="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/builder.yaml"
+            echo "Builder started — see the [workflow runs](${runs})."
+          } >>"${GITHUB_STEP_SUMMARY}"

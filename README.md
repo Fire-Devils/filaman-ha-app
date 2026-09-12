@@ -27,6 +27,10 @@ management system for 3D printing.
 Requires a Home Assistant installation that supports add-ons (Home Assistant OS
 or Supervised) on `amd64` or `aarch64`.
 
+The add-on version tracks the FilaMan app version: a daily workflow pins the
+latest app release and publishes the matching add-on image, so Home Assistant
+offers the update on its own. See [RELEASING.md](RELEASING.md).
+
 ## Support
 
 - Add-on packaging: [issues in this repository](https://github.com/Fire-Devils/filaman-ha-app/issues)
