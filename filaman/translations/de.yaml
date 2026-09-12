@@ -1,0 +1,34 @@
+configuration:
+  admin_email:
+    name: E-Mail des Administrators
+    description: >-
+      E-Mail-Adresse des ersten Administrators, gleichzeitig der Anmeldename.
+      Wird nur beim Anlegen des Kontos verwendet.
+  admin_password:
+    name: Passwort des Administrators
+    description: >-
+      Passwort für den ersten Administrator. Greift nur beim Anlegen des Kontos
+      — spätere Änderungen bitte in FilaMan selbst vornehmen.
+  admin_display_name:
+    name: Name des Administrators
+    description: In der Oberfläche angezeigter Name. Standard ist die E-Mail-Adresse.
+  admin_language:
+    name: Sprache
+    description: Sprache der Oberfläche für das erste Administrator-Konto.
+  log_level:
+    name: Protokollstufe
+    description: >-
+      Wie ausführlich das Add-on protokolliert. debug nur zur Fehlersuche
+      verwenden.
+  cors_origins:
+    name: Zusätzliche CORS-Ursprünge
+    description: >-
+      Komma-getrennte Liste von Ursprüngen, die die FilaMan-API aus dem Browser
+      aufrufen dürfen. Leer lassen, außer FilaMan wird woanders eingebettet.
+  filamentdb_url:
+    name: URL der Filament-Datenbank
+    description: >-
+      Quelle für Filament- und Hersteller-Abfragen. Leer lassen, um
+      https://db.filaman.app zu verwenden.
+network:
+  8000/tcp: Weboberfläche

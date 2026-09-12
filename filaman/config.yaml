@@ -1,0 +1,32 @@
+# https://developers.home-assistant.io/docs/add-ons/configuration
+name: FilaMan
+version: "1.3.3"
+slug: filaman
+description: >-
+  Filament management for 3D printing — spools, printers, AMS slots and RFID tags
+url: "https://github.com/Fire-Devils/filaman-ha-app/tree/main/filaman"
+image: "ghcr.io/fire-devils/filaman-addon"
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+ports:
+  "8000/tcp": 8083
+ports_description:
+  "8000/tcp": FilaMan web interface
+webui: "http://[HOST]:[PORT:8000]"
+watchdog: "http://[HOST]:[PORT:8000]/health"
+options:
+  admin_email: ""
+  admin_password: ""
+  admin_language: en
+  log_level: info
+schema:
+  admin_email: "email"
+  admin_password: "password"
+  admin_display_name: "str?"
+  admin_language: "list(en|de)?"
+  log_level: "list(debug|info|warning|error)?"
+  cors_origins: "str?"
+  filamentdb_url: "url?"
