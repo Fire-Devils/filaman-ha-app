@@ -84,8 +84,9 @@ above.
 The container rate-limits logins to 10 per minute per client IP. Wait a minute.
 
 **The add-on keeps restarting**
-The watchdog restarts FilaMan when `http://<host>:8083/health` stops answering.
-Check the add-on log for the real error, usually a failed migration.
+With the add-on's *Watchdog* switch on, Home Assistant restarts FilaMan when the
+container's health check (`/health`) stops answering. Check the add-on log for
+the real error, usually a failed migration.
 
 ## Support
 

@@ -9,14 +9,11 @@ image: "ghcr.io/fire-devils/filaman-addon"
 arch:
   - aarch64
   - amd64
-startup: application
-boot: auto
 ports:
   "8000/tcp": 8083
 ports_description:
   "8000/tcp": FilaMan web interface
 webui: "http://[HOST]:[PORT:8000]"
-watchdog: "http://[HOST]:[PORT:8000]/health"
 options:
   admin_email: ""
   admin_password: ""

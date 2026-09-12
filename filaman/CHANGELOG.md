@@ -15,4 +15,5 @@ First release of the FilaMan add-on, wrapping FilaMan `v1.3.3`.
   published image.
 - All FilaMan data (database, backups, uploads, logos, plugins) lives in the
   add-on's persisted `/data` directory.
-- A watchdog restarts the add-on when `/health` stops answering.
+- The container's own health check on `/health` lets Home Assistant's watchdog
+  restart the add-on when FilaMan stops answering.
