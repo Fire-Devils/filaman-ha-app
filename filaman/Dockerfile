@@ -8,7 +8,7 @@
 # FILAMAN_VERSION is deliberately separate from the add-on version: app tags
 # carry a "v" prefix, and an add-on-only fix may ship as 1.3.3-2 without a new
 # app release.
-ARG FILAMAN_VERSION=v1.3.5
+ARG FILAMAN_VERSION=v1.3.6
 FROM ghcr.io/fire-devils/filaman-system:${FILAMAN_VERSION}
 
 # Every persistent path lives under /app/data (database, backups, uploads,
