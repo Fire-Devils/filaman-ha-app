@@ -3,6 +3,10 @@
 All notable changes to this add-on are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 1.4.3
+
+- Updated FilaMan to [v1.4.3](https://github.com/Fire-Devils/filaman-system/releases/tag/v1.4.3).
+
 ## 1.4.2
 
 - Updated FilaMan to [v1.4.2](https://github.com/Fire-Devils/filaman-system/releases/tag/v1.4.2).
