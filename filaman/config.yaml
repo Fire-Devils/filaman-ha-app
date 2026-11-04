@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration
 name: FilaMan
-version: "2.0.0"
+version: "2.0.2"
 slug: filaman
 description: >-
   Filament management for 3D printing — spools, printers, AMS slots and RFID tags
