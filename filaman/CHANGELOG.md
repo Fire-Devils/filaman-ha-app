@@ -3,6 +3,10 @@
 All notable changes to this add-on are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 2.9.1
+
+- Updated FilaMan to [v2.9.1](https://github.com/Fire-Devils/filaman-system/releases/tag/v2.9.1).
+
 ## 2.9.0
 
 - Updated FilaMan to [v2.9.0](https://github.com/Fire-Devils/filaman-system/releases/tag/v2.9.0).
