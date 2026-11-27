@@ -99,8 +99,13 @@ jobs:
               -H "Authorization: Bearer ${token}" \
               -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.docker.distribution.manifest.v2+json" \
               "https://ghcr.io/v2/${APP_IMAGE}/manifests/${tag}"; then
-            echo "::error::ghcr.io/${APP_IMAGE}:${tag} does not exist — did the app release build fail?"
-            exit 1
+            # Usually the release build is still pushing the image; the next
+            # scheduled run picks it up. Warn instead of failing the run.
+            echo "::warning::ghcr.io/${APP_IMAGE}:${tag} does not exist yet — still building, or did the app release build fail? Skipping for now."
+            echo "Image ghcr.io/${APP_IMAGE}:${tag} not found yet — skipped, the next run retries." \
+              >>"${GITHUB_STEP_SUMMARY}"
+            echo "skip=true" >>"${GITHUB_OUTPUT}"
+            exit 0
           fi
 
           {
@@ -170,6 +175,7 @@ jobs:
           } >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Commit and push
+        id: commit
         if: steps.resolve.outputs.skip == 'false' && !inputs.dry_run
         env:
           TAG: ${{ steps.resolve.outputs.tag }}
@@ -177,15 +183,31 @@ jobs:
           CURRENT: ${{ steps.resolve.outputs.current }}
         run: |
           set -euo pipefail
+          # A re-run checks out the run's original commit, and another sync may
+          # have pushed meanwhile: re-read the version on the branch tip first.
+          git fetch --quiet origin "${GITHUB_REF_NAME}"
+          remote=$(git show "origin/${GITHUB_REF_NAME}:filaman/config.yaml" \
+            | sed -n 's/^version: "\(.*\)"$/\1/p')
+          remote_base="${remote%%-*}"
+          highest=$(printf '%s\n%s\n' "${remote_base}" "${VERSION}" | sort -V | tail -1)
+          if [[ -n "${remote_base}" && "${highest}" == "${remote_base}" ]]; then
+            echo "Branch already has add-on ${remote} (>= ${VERSION}) — nothing to push." \
+              >>"${GITHUB_STEP_SUMMARY}"
+            echo "pushed=false" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add filaman/config.yaml filaman/Dockerfile filaman/CHANGELOG.md
           git commit -m "chore: update FilaMan to ${TAG}" -m \
             "Add-on ${CURRENT} -> ${VERSION}, pinned to ghcr.io/${APP_IMAGE}:${TAG}."
-          git push
+          # Unrelated commits on the tip (docs, workflows) are fine to rebase onto.
+          git pull --quiet --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "pushed=true" >>"${GITHUB_OUTPUT}"
 
       - name: Trigger the image build
-        if: steps.resolve.outputs.skip == 'false' && !inputs.dry_run
+        if: steps.commit.outputs.pushed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.resolve.outputs.version }}
